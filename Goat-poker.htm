@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Goat Gulch Poker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rye&family=Bitter:wght@500;700&display=swap">
+<style>
+:root{--bg:#dfe8d2;--fg:#1d2a1f;--muted:#51634f;--brass:#d9a441;--barn:#8c2f26;--wood:#5b3a1e;--card:#fffdf4;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1a14;--fg:#eaf0dc;--muted:#9fb39a}}
+:root[data-theme="dark"]{--bg:#0f1a14;--fg:#eaf0dc;--muted:#9fb39a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Bitter,Georgia,"Times New Roman",serif;line-height:1.45}
+.game{max-width:760px;margin:0 auto;padding:14px}
+h1{font-family:Rye,Georgia,serif;font-weight:400;font-size:clamp(28px,8vw,44px);margin:6px 0 0;letter-spacing:.02em}
+.sub{margin:0 0 12px;color:var(--muted)}
+.table{background:radial-gradient(ellipse at center,#26704a 0%,#1a4d33 70%,#143f2a 100%);border:8px solid var(--wood);border-radius:28px;padding:14px;color:#fff;box-shadow:inset 0 0 40px #0008}
+.opps{display:flex;gap:8px;justify-content:space-between}
+.opp{flex:1;min-width:0;text-align:center;transition:opacity .2s}
+.opp.out{opacity:.4}
+.av{font-size:clamp(32px,9vw,46px);line-height:1}
+.opp b{display:block;font-size:14px}
+.opp small{display:block;color:var(--brass);font-weight:700}
+.bub{min-height:22px;font-size:12px;font-style:italic;color:#fff;opacity:.9;margin:2px 0 4px}
+.ocards{display:flex;justify-content:center;gap:2px}
+.mid{text-align:center;margin:12px 0}
+.pot{display:inline-block;background:#0006;border:2px solid var(--brass);border-radius:999px;padding:4px 18px;font-weight:700}
+.msg{min-height:44px;margin-top:8px;font-size:15px}
+.who{text-align:center;font-weight:700;margin-bottom:6px}
+.who b{color:var(--brass)}
+.hand{display:flex;gap:clamp(4px,2vw,10px);justify-content:center;min-height:100px;padding-top:16px}
+.hname{text-align:center;margin-top:8px;font-weight:700;color:var(--brass);min-height:24px}
+.card{width:clamp(50px,15vw,72px);aspect-ratio:5/7;background:var(--card);color:#222;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:space-around;font-weight:700;font-size:clamp(14px,4vw,20px);box-shadow:0 2px 6px #0007;user-select:none;transition:transform .15s}
+.card i{font-style:normal;font-size:1.5em;line-height:1}
+.card.red{color:#b3261e}
+.card.sm{width:clamp(28px,8vw,38px);font-size:11px;border-radius:5px}
+.card.back{background:repeating-linear-gradient(45deg,#7a4a21,#7a4a21 6px,#8f5a2b 6px,#8f5a2b 12px);justify-content:center}
+.card.sel{transform:translateY(-16px);outline:3px solid var(--brass)}
+.can .card{cursor:pointer}
+.btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px;min-height:46px}
+button{font:inherit;font-weight:700;padding:10px 20px;border-radius:999px;border:0;background:#f3ecd8;color:#2b2418;cursor:pointer}
+button:focus-visible,.card:focus-visible{outline:3px solid #fff;outline-offset:2px}
+button.gold{background:var(--brass)}
+button.ghost{background:transparent;color:#fff;border:2px solid #fff9}
+details{margin-top:14px;color:var(--muted);font-size:14px}
+summary{cursor:pointer;font-weight:700}
+</style>
+</head>
+<body>
+<div class="game">
+  <h1>Goat Gulch Poker</h1>
+  <p class="sub">Five-card draw against the herd. Ante 10, bets of 20.</p>
+  <div class="table">
+    <div id="opps" class="opps"></div>
+    <div class="mid"><div class="pot">Pot <span id="pot">0</span> 🪙</div><div id="msg" class="msg" aria-live="polite"></div></div>
+    <div class="who">🤠 You · <b id="ychips">500</b> 🪙</div>
+    <div id="hand" class="hand"></div>
+    <div id="hname" class="hname"></div>
+    <div id="btns" class="btns"></div>
+  </div>
+  <details>
+    <summary>How to play</summary>
+    <p>Everyone antes, gets five cards, and bets. Tap the cards you want to toss, swap them, then bet again. Best hand wins the pot. Suits are hay 🌾, bells 🔔, cheese 🧀 and carrots 🥕.</p>
+  </details>
+</div>
+<script>
+const SU=["🌾","🔔","🧀","🥕"],RK=["2","3","4","5","6","7","8","9","10","J","Q","K","A"];
+const HN=["Lone Goat","Pair of Kids","Two Pair: Twin Billies","Three of a Kind: Trio of Nannies","Straight: Mountain Climb","Flush: Hay Bale","Full House: Full Barn","Four of a Kind: Stampede","Straight Flush: Summit Sprint"];
+const ANTE=10,RAISE=20,START=500;
+const $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let deck,players,pot,phase="",sel=new Set(),drawUpd=null;
+
+function newDeck(){deck=[];for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({r,s});
+ for(let i=51;i>0;i--){const j=Math.floor(Math.random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]]}}
+
+function ev(h){
+ const rs=h.map(c=>c.r).sort((a,b)=>b-a),cnt={};
+ rs.forEach(r=>cnt[r]=(cnt[r]||0)+1);
+ const g=Object.entries(cnt).map(([r,c])=>[+r,c]).sort((a,b)=>b[1]-a[1]||b[0]-a[0]);
+ const fl=h.every(c=>c.s===h[0].s);
+ let st=g.length===5&&rs[0]-rs[4]===4,tb=g.map(x=>x[0]);
+ if(g.length===5&&rs[0]===12&&rs[1]===3){st=true;tb=[3]}
+ else if(st)tb=[rs[0]];
+ let cat=0;
+ if(st&&fl)cat=8;else if(g[0][1]===4)cat=7;else if(g[0][1]===3&&g[1][1]===2)cat=6;
+ else if(fl)cat=5;else if(st)cat=4;else if(g[0][1]===3)cat=3;
+ else if(g[0][1]===2&&g[1][1]===2)cat=2;else if(g[0][1]===2)cat=1;
+ return [cat,...tb];
+}
+function cmp(a,b){for(let i=0;i<Math.max(a.length,b.length);i++){const d=(a[i]||0)-(b[i]||0);if(d)return d}return 0}
+function hname(e){return e[0]===8&&e[1]===12?"Royal Flush: King of the Mountain":HN[e[0]]}
+
+function cardEl(c,cls,i){return `<div class="card ${cls||""} ${c.s>1?"red":""}" ${i!==undefined?`data-i="${i}" tabindex="0" role="button" aria-label="${RK[c.r]} of ${SU[c.s]}"`:""}><span>${RK[c.r]}</span><i>${SU[c.s]}</i></div>`}
+const backEl='<div class="card sm back"><i>🐐</i></div>';
+function msg(t){$("msg").textContent=t}
+function setBtns(list){const b=$("btns");b.innerHTML="";list.forEach(([t,fn,cls])=>{const x=document.createElement("button");x.textContent=t;x.className=cls||"";x.onclick=fn;b.append(x)})}
+
+function render(){
+ $("pot").textContent=pot;
+ $("opps").innerHTML=players.slice(1).map(p=>`<div class="opp ${p.in?"":"out"}"><div class="av">🐐</div><b>${p.n}</b><small>${p.chips} 🪙</small><div class="bub">${p.in?(p.say||""):(p.hand.length?"Folded":"Out of chips")}</div><div class="ocards">${p.hand.map(c=>p.show?cardEl(c,"sm"):backEl).join("")}</div></div>`).join("");
+ const me=players[0];
+ $("ychips").textContent=me.chips;
+ $("hand").className="hand"+(phase==="draw"?" can":"");
+ $("hand").innerHTML=me.hand.map((c,i)=>cardEl(c,sel.has(i)?"sel":"",i)).join("");
+ $("hname").textContent=me.hand.length?hname(ev(me.hand)):"";
+}
+function toggle(el){const c=el.closest(".card");if(!c||phase!=="draw")return;const i=+c.dataset.i;sel.has(i)?sel.delete(i):sel.add(i);drawUpd&&drawUpd()}
+$("hand").addEventListener("click",e=>toggle(e.target));
+$("hand").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle(e.target)}});
+
+function humanDraw(){return new Promise(res=>{
+ phase="draw";sel=new Set();
+ drawUpd=()=>{render();setBtns([[sel.size?`Swap ${sel.size} card${sel.size>1?"s":""}`:"Stand pat",()=>{phase="";drawUpd=null;const idx=[...sel];sel=new Set();setBtns([]);res(idx)},"gold"]])};
+ drawUpd();msg("Tap the cards you want to toss, then swap.");
+})}
+function humanAct(need,canRaise){return new Promise(res=>{
+ const go=a=>{setBtns([]);res(a)},me=players[0];
+ const l=[["Fold",()=>go("fold"),"ghost"],[need?`Call ${Math.min(need,me.chips)}`:"Check",()=>go("call")]];
+ if(canRaise&&me.chips>need)l.push([need?`Raise +${RAISE}`:`Bet ${RAISE}`,()=>go("raise"),"gold"]);
+ msg(need?`${need} to call. Your move.`:"Your move: check or bet.");
+ setBtns(l);
+})}
+
+function botAct(p,need,canRaise){
+ const e=ev(p.hand);
+ let s=e[0]+(e[0]<=1?e[1]/20:0)+(Math.random()-.5)*p.wild;
+ if(need===0)return canRaise&&p.chips>0&&(s>=2||Math.random()<p.bluff)?"raise":"call";
+ if(s<0.8)return "fold";
+ if(canRaise&&p.chips>need&&s>=2.2&&Math.random()<.6)return "raise";
+ return "call";
+}
+function botDraw(p){
+ const e=ev(p.hand);
+ if(e[0]>=4)return [];
+ const cnt={};p.hand.forEach(c=>cnt[c.r]=(cnt[c.r]||0)+1);
+ let keep=p.hand.map((c,i)=>cnt[c.r]>1?i:-1).filter(i=>i>=0);
+ if(!keep.length){const top=p.hand.reduce((b,c,i)=>c.r>p.hand[b].r?i:b,0);if(p.hand[top].r>=10)keep=[top]}
+ return [0,1,2,3,4].filter(i=>!keep.includes(i));
+}
+const TAUNT={raise:["Baaa-ise it!","Hay, bring it.","Raising the stakes!"],fold:["Mehh. I fold.","Not my pasture.","Out."],call:["Bleat. Call.","I’m in.","Chewing on it… in."]};
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+
+async function betRound(){
+ const P=players;P.forEach(p=>{p.bet=0;p.acted=false});
+ let cur=0,raises=0,i=0;
+ while(true){
+  const live=P.filter(p=>p.in);
+  if(live.length<2)break;
+  if(live.every(p=>p.chips===0||(p.acted&&p.bet===cur)))break;
+  const p=P[i%P.length];i++;
+  if(!p.in||p.chips===0||(p.acted&&p.bet===cur))continue;
+  const need=cur-p.bet,canRaise=raises<3;
+  let act;
+  if(p.human){render();act=await humanAct(need,canRaise)}
+  else{render();await sleep(750);act=botAct(p,need,canRaise);p.say=pick(TAUNT[act==="call"&&need===0?"call":act])}
+  if(act==="fold"){p.in=false;if(p.human)msg("You folded.")}
+  else{
+   let pay=Math.min(p.chips,need);
+   if(act==="raise"){const r=Math.min(p.chips,need+RAISE);if(r>need){pay=r;cur=p.bet+r;raises++;P.forEach(q=>{if(q!==p)q.acted=false})}}
+   p.chips-=pay;p.bet+=pay;pot+=pay;
+  }
+  p.acted=true;render();
+ }
+ P.forEach(p=>{if(!p.human)p.say=""});
+}
+
+async function playHand(){
+ newDeck();pot=0;sel=new Set();setBtns([]);
+ players.forEach(p=>{p.show=false;p.say="";p.bet=0;p.hand=[];p.in=p.chips>0;
+  if(p.in){const a=Math.min(ANTE,p.chips);p.chips-=a;pot+=a;for(let k=0;k<5;k++)p.hand.push(deck.pop())}});
+ msg("Ante’s in. Cards dealt!");render();await sleep(700);
+ await betRound();
+ if(players.filter(p=>p.in).length>1){
+  msg("Draw time!");
+  if(players[0].in){const idx=await humanDraw();idx.forEach(i=>players[0].hand[i]=deck.pop())}
+  for(const p of players.slice(1)){if(!p.in)continue;const d=botDraw(p);d.forEach(i=>p.hand[i]=deck.pop());p.say=d.length?`Swaps ${d.length}`:"Stands pat"}
+  render();await sleep(1000);
+  players.slice(1).forEach(p=>p.say="");
+  msg("Final betting round.");render();
+  await betRound();
+ }
+ const live=players.filter(p=>p.in),amt=pot;
+ let wins,text;
+ if(live.length===1){wins=live;text=`${live[0].human?"You win":live[0].n+" wins"} ${amt} 🪙. Everyone else folded!`}
+ else{
+  live.forEach(p=>{p.show=true;p.ev=ev(p.hand)});
+  let best=live[0].ev;live.forEach(p=>{if(cmp(p.ev,best)>0)best=p.ev});
+  wins=live.filter(p=>cmp(p.ev,best)===0);
+  text=wins.length===1?`${wins[0].human?"You take":wins[0].n+" takes"} the pot of ${amt} 🪙 with ${hname(best)}.`:`Split pot of ${amt} 🪙 between ${wins.map(w=>w.human?"you":w.n).join(" and ")} (${hname(best)}).`;
+ }
+ const share=Math.floor(amt/wins.length);wins.forEach(w=>w.chips+=share);pot=0;
+ players.forEach(p=>{if(p.chips===0&&!p.human)p.hand=p.show?p.hand:p.hand});
+ msg(text);render();
+ const me=players[0];
+ if(me.chips<=0){msg(text+" You’re out of chips. The herd ate your wallet.");setBtns([["New game",newGame,"gold"]])}
+ else if(players.slice(1).every(p=>p.chips<=0)){msg(text+" You cleaned out the whole herd!");setBtns([["New game",newGame,"gold"]])}
+ else setBtns([["Next hand",playHand,"gold"]]);
+}
+
+function newGame(){
+ players=[
+  {n:"You",human:true,chips:START},
+  {n:"Billy",chips:START,wild:1.4,bluff:.3},
+  {n:"Nanny",chips:START,wild:.6,bluff:.08},
+  {n:"Old Gruff",chips:START,wild:1,bluff:.15}
+ ].map(p=>({hand:[],in:false,show:false,say:"",bet:0,...p}));
+ pot=0;phase="";render();
+ msg("Pull up a hay bale. Billy, Nanny and Old Gruff are ready to bluff.");
+ setBtns([["Deal",playHand,"gold"]]);
+}
+newGame();
+</script>
+</body>
+</html>
